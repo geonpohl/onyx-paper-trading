@@ -1,25 +1,34 @@
 {
-  "name": "onyx-take-home",
+  "name": "onyx-paper-trading",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "dev": "npm run build && wrangler dev",
+    "dev:web": "vite",
+    "build": "tsc -b && tsc --noEmit -p tsconfig.worker.json && vite build",
+    "lint": "oxlint .",
+    "test": "vitest run",
+    "db:local": "wrangler d1 migrations apply onyx-paper --local",
+    "db:remote": "wrangler d1 migrations apply onyx-paper --remote",
+    "deploy": "npm run build && wrangler deploy",
     "preview": "vite preview"
   },
   "dependencies": {
+    "hono": "^4.10.8",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260717.1",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.112.0"
   }
 }
