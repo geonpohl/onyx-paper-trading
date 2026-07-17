@@ -41,6 +41,54 @@ const app = new Hono<AppEnv>()
 const ONYX_BASE = 'https://predictions.dev-onyxodds.com'
 const SESSION_COOKIE = 'onyx_session'
 const SESSION_DAYS = 14
+const SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    balance_cents INTEGER NOT NULL DEFAULT 100000 CHECK (balance_cents >= 0),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
+  'CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id)',
+  'CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at)',
+  `CREATE TABLE IF NOT EXISTS orders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    market_symbol TEXT NOT NULL,
+    market_name TEXT NOT NULL,
+    sport TEXT NOT NULL,
+    side TEXT NOT NULL CHECK (side IN ('YES', 'NO')),
+    shares REAL NOT NULL CHECK (shares > 0),
+    fill_price REAL NOT NULL CHECK (fill_price > 0 AND fill_price < 1),
+    cost_cents INTEGER NOT NULL CHECK (cost_cents > 0),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
+  'CREATE INDEX IF NOT EXISTS orders_user_created_idx ON orders(user_id, created_at DESC)',
+  'CREATE INDEX IF NOT EXISTS orders_user_position_idx ON orders(user_id, market_symbol, side)',
+  `CREATE TRIGGER IF NOT EXISTS orders_require_balance
+    BEFORE INSERT ON orders
+    FOR EACH ROW
+    WHEN (SELECT balance_cents FROM users WHERE id = NEW.user_id) < NEW.cost_cents
+    BEGIN
+      SELECT RAISE(ABORT, 'insufficient funds');
+    END`,
+  `CREATE TRIGGER IF NOT EXISTS orders_debit_balance
+    AFTER INSERT ON orders
+    FOR EACH ROW
+    BEGIN
+      UPDATE users
+      SET balance_cents = balance_cents - NEW.cost_cents
+      WHERE id = NEW.user_id;
+    END`,
+] as const
+let schemaReady: Promise<void> | null = null
 
 const jsonError = (message: string, status: 400 | 401 | 404 | 409 | 422 | 502 = 400) =>
   new Response(JSON.stringify({ error: message }), {
@@ -79,6 +127,18 @@ async function marketPage(env: Env, limit: number, offset: number) {
 
 async function quoteFor(env: Env, symbol: string) {
   return onyxFetch<Quote>(env, `/markets/${encodeURIComponent(symbol)}/prices`)
+}
+
+async function ensureSchema(env: Env) {
+  if (!schemaReady) {
+    schemaReady = env.DB.batch(SCHEMA_STATEMENTS.map((statement) => env.DB.prepare(statement)))
+      .then(() => undefined)
+      .catch((error) => {
+        schemaReady = null
+        throw error
+      })
+  }
+  return schemaReady
 }
 
 const encoder = new TextEncoder()
@@ -128,6 +188,7 @@ function publicUser(user: UserRow) {
 }
 
 async function sessionUser(c: Context<AppEnv>) {
+  await ensureSchema(c.env)
   const token = getCookie(c, SESSION_COOKIE)
   if (!token) return null
   const tokenHash = await sha256(token)
@@ -194,6 +255,7 @@ app.get('/api/prices', async (c) => {
 })
 
 app.post('/api/auth/signup', async (c) => {
+  await ensureSchema(c.env)
   const body = await c.req
     .json<{ email?: string; password?: string }>()
     .catch(() => ({} as { email?: string; password?: string }))
@@ -230,6 +292,7 @@ app.post('/api/auth/signup', async (c) => {
 })
 
 app.post('/api/auth/login', async (c) => {
+  await ensureSchema(c.env)
   const body = await c.req
     .json<{ email?: string; password?: string }>()
     .catch(() => ({} as { email?: string; password?: string }))
