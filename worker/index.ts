@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { fillPrice, sidePrices, type RawQuote, type Side } from './domain'
+import { INDEX_HTML } from './static.generated'
 
 interface Env {
   DB: D1Database
@@ -362,7 +363,12 @@ app.post('/api/orders/market', async (c) => {
 
 app.notFound((c) => {
   if (c.req.path.startsWith('/api/')) return jsonError('Not found', 404)
-  return c.env.ASSETS.fetch(c.req.raw)
+  return new Response(INDEX_HTML, {
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-cache',
+    },
+  })
 })
 
 export default app

@@ -2,7 +2,7 @@
 
 Onyx Paper is a full-stack paper-trading app for the live prediction markets exposed by the [Onyx Predictions API](https://predictions.dev-onyxodds.com/docs#/). Users receive $1,000 in simulated funds, can buy YES or NO at an executable upstream quote, and can follow their fills, positions, and unrealized P&L. No order is ever sent to a trading venue.
 
-> **Live app:** deployment URL added after the production Worker is published.
+> **Live app:** [onyx-paper-trading.geonpohl.chatgpt.site](https://onyx-paper-trading.geonpohl.chatgpt.site)
 
 ## Product surface
 
