@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "npm run build && wrangler dev",
     "dev:web": "vite",
-    "build": "tsc -b && tsc --noEmit -p tsconfig.worker.json && vite build",
+    "build": "tsc -b && tsc --noEmit -p tsconfig.worker.json && vite build && wrangler deploy --dry-run --outdir dist/server",
     "lint": "oxlint .",
     "test": "vitest run",
     "db:local": "wrangler d1 migrations apply onyx-paper --local",

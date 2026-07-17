@@ -14,7 +14,7 @@
       "binding": "DB",
       "database_name": "onyx-paper",
       "database_id": "LOCAL_DATABASE_ID",
-      "migrations_dir": "migrations"
+      "migrations_dir": "drizzle"
     }
   ]
 }
