@@ -221,7 +221,7 @@ app.get('/api/health', (c) => c.json({ ok: true, upstream: ONYX_BASE }))
 
 app.get('/api/markets', async (c) => {
   try {
-    const limit = Math.min(1000, Math.max(1, Number(c.req.query('limit')) || 1000))
+    const limit = Math.min(500, Math.max(1, Number(c.req.query('limit')) || 500))
     const offset = Math.max(0, Number(c.req.query('offset')) || 0)
     const markets = await marketPage(c.env, limit, offset)
     return c.json({

@@ -52,6 +52,8 @@ interface AccountSummary {
 }
 
 const PAGE_SIZE = 12
+const MARKET_BATCH_SIZE = 500
+const PRICE_BATCH_SIZE = 24
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -78,6 +80,8 @@ function App() {
   const [markets, setMarkets] = useState<Market[]>([])
   const [marketError, setMarketError] = useState('')
   const [loadingMarkets, setLoadingMarkets] = useState(true)
+  const [loadingMoreMarkets, setLoadingMoreMarkets] = useState(false)
+  const [hasMoreMarkets, setHasMoreMarkets] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [summary, setSummary] = useState<AccountSummary | null>(null)
   const [prices, setPrices] = useState<Record<string, Price>>({})
@@ -111,24 +115,15 @@ function App() {
     })
     let cancelled = false
     const loadMarkets = async () => {
-      let offset = 0
       try {
-        while (offset < 10_000) {
-          const page = await api<{ markets: Market[]; hasMore: boolean }>(
-            `/api/markets?limit=1000&offset=${offset}`,
-          )
-          if (cancelled) return
-          if (offset === 0) {
-            setMarkets(page.markets)
-            setLoadingMarkets(false)
-          } else {
-            setMarkets((current) => [...current, ...page.markets])
-          }
-          if (!page.hasMore) break
-          offset += 1000
-        }
+        const catalogPage = await api<{ markets: Market[]; hasMore: boolean }>(
+          `/api/markets?limit=${MARKET_BATCH_SIZE}&offset=0`,
+        )
+        if (cancelled) return
+        setMarkets(catalogPage.markets)
+        setHasMoreMarkets(catalogPage.hasMore)
       } catch (error) {
-        if (!cancelled && offset === 0) setMarketError((error as Error).message)
+        if (!cancelled) setMarketError((error as Error).message)
       } finally {
         if (!cancelled) setLoadingMarkets(false)
       }
@@ -138,6 +133,28 @@ function App() {
       cancelled = true
     }
   }, [loadAccount])
+
+  const loadMoreMarkets = useCallback(async () => {
+    if (loadingMoreMarkets || !hasMoreMarkets) return false
+    setLoadingMoreMarkets(true)
+    setMarketError('')
+    try {
+      const catalogPage = await api<{ markets: Market[]; hasMore: boolean }>(
+        `/api/markets?limit=${MARKET_BATCH_SIZE}&offset=${markets.length}`,
+      )
+      setMarkets((current) => {
+        const knownSymbols = new Set(current.map((market) => market.symbol))
+        return [...current, ...catalogPage.markets.filter((market) => !knownSymbols.has(market.symbol))]
+      })
+      setHasMoreMarkets(catalogPage.hasMore)
+      return catalogPage.markets.length > 0
+    } catch (error) {
+      setMarketError((error as Error).message)
+      return false
+    } finally {
+      setLoadingMoreMarkets(false)
+    }
+  }, [hasMoreMarkets, loadingMoreMarkets, markets.length])
 
   const sports = useMemo(
     () => ['ALL', ...Array.from(new Set(markets.map((market) => market.sport))).sort()],
@@ -164,10 +181,18 @@ function App() {
     if (page > pageCount) setPage(pageCount)
   }, [page, pageCount])
 
+  async function advanceMarketPage() {
+    if (page < pageCount) {
+      setPage((value) => value + 1)
+      return
+    }
+    if (await loadMoreMarkets()) setPage((value) => value + 1)
+  }
+
   const priceSymbolKey = useMemo(() => {
     const symbols = new Set(visibleMarkets.map((market) => market.symbol))
     summary?.positions.forEach((position) => symbols.add(position.marketSymbol))
-    return Array.from(symbols).slice(0, 24).join(',')
+    return Array.from(symbols).join(',')
   }, [visibleMarkets, summary?.positions])
 
   useEffect(() => {
@@ -175,11 +200,21 @@ function App() {
     let cancelled = false
     const refresh = async () => {
       try {
-        const data = await api<{ prices: Record<string, Price> }>(
-          `/api/prices?symbols=${encodeURIComponent(priceSymbolKey)}`,
+        const symbols = priceSymbolKey.split(',').filter(Boolean)
+        const batches = Array.from(
+          { length: Math.ceil(symbols.length / PRICE_BATCH_SIZE) },
+          (_, index) => symbols.slice(index * PRICE_BATCH_SIZE, (index + 1) * PRICE_BATCH_SIZE),
+        )
+        const responses = await Promise.all(
+          batches.map((batch) =>
+            api<{ prices: Record<string, Price> }>(
+              `/api/prices?symbols=${encodeURIComponent(batch.join(','))}`,
+            ),
+          ),
         )
         if (!cancelled) {
-          setPrices((current) => ({ ...current, ...data.prices }))
+          const refreshedPrices = Object.assign({}, ...responses.map((response) => response.prices))
+          setPrices((current) => ({ ...current, ...refreshedPrices }))
           setLastPriceAt(new Date())
         }
       } catch {
@@ -304,9 +339,9 @@ function App() {
             <p>Explore every Onyx prediction market and test your conviction with $1,000 in simulated funds.</p>
           </div>
           <div className="market-stat-card">
-            <small>Markets online</small>
+            <small>Markets loaded</small>
             <strong>{loadingMarkets ? '···' : markets.length.toLocaleString()}</strong>
-            <span>Across {Math.max(0, sports.length - 1)} leagues</span>
+            <span>{hasMoreMarkets ? 'More available on demand' : `Across ${Math.max(0, sports.length - 1)} leagues`}</span>
             <div className="sparkline" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /><i /><i /></div>
           </div>
         </section>
@@ -332,7 +367,7 @@ function App() {
               </select>
             </div>
 
-            {loadingMarkets && <div className="state-card"><div className="spinner" />Loading every market from Onyx…</div>}
+            {loadingMarkets && <div className="state-card"><div className="spinner" />Loading the first market page from Onyx…</div>}
             {marketError && <div className="state-card error"><strong>Market feed unavailable</strong><span>{marketError}</span></div>}
             {!loadingMarkets && !marketError && visibleMarkets.length === 0 && <div className="state-card">No markets match those filters.</div>}
 
@@ -354,10 +389,10 @@ function App() {
                 )
               })}
             </div>
-            {!loadingMarkets && filteredMarkets.length > 0 && (
+            {!loadingMarkets && !marketError && (filteredMarkets.length > 0 || hasMoreMarkets) && (
               <div className="pagination">
-                <span>{filteredMarkets.length.toLocaleString()} markets</span>
-                <div><button disabled={page === 1} onClick={() => setPage((value) => value - 1)}>←</button><strong>{page} / {pageCount}</strong><button disabled={page === pageCount} onClick={() => setPage((value) => value + 1)}>→</button></div>
+                <span>{filteredMarkets.length.toLocaleString()} matching markets loaded</span>
+                <div><button disabled={page === 1} onClick={() => setPage((value) => value - 1)}>←</button><strong>{page} / {pageCount}{hasMoreMarkets ? '+' : ''}</strong><button disabled={loadingMoreMarkets || (page === pageCount && !hasMoreMarkets)} onClick={() => void advanceMarketPage()}>{loadingMoreMarkets ? '…' : '→'}</button></div>
               </div>
             )}
           </section>

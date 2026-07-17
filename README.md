@@ -8,7 +8,7 @@ Onyx Paper is a full-stack paper-trading app for the live prediction markets exp
 
 - Email/password signup and login with isolated user accounts
 - A browseable inventory of every market returned by the Onyx `/markets` endpoint
-- Progressive background loading, full-text search, and league filtering across the loaded inventory
+- On-demand upstream pagination, plus full-text search and league filtering across the loaded inventory
 - Live visible-market quotes refreshed every eight seconds
 - Server-side re-pricing immediately before every simulated fill
 - YES buys filled at the upstream ask (falling back to last); NO buys filled at `1 − bid` (falling back to `1 − last`)
@@ -76,7 +76,7 @@ Passwords never leave the Worker except in the original TLS request and are stor
 
 ### Market loading
 
-The Onyx inventory is larger than a single API page. The first 1,000 contracts render quickly; remaining pages load progressively in the background up to the upstream maximum currently observed. The UI sorts the current event date to the front so executable contracts appear first, while search and pagination make the entire loaded inventory browseable.
+The Onyx inventory is larger than a single API page. The app requests the first 500 contracts, renders 12 cards at a time, and fetches the next upstream batch only when the user reaches the end of the loaded catalog. This avoids downloading thousands of unused contracts during startup while keeping the full inventory browseable. Search and league filters apply to the batches loaded so far, and the UI clearly marks when more inventory is available on demand.
 
 ## Deploy
 
