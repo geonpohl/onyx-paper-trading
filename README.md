@@ -20,7 +20,7 @@ Onyx Paper is a full-stack paper-trading app for the live prediction markets exp
 - **UI:** React 19, TypeScript, Vite
 - **API:** Hono on Cloudflare Workers
 - **Database:** Cloudflare D1 (SQLite)
-- **Auth:** first-party session cookies; passwords use salted PBKDF2-SHA-256 (120,000 iterations)
+- **Auth:** first-party session cookies; passwords use salted PBKDF2-SHA-256 (50,000 iterations, sized to the hosted Worker's CPU budget)
 - **Market data:** Onyx Predictions REST API, proxied through the Worker
 
 This began from a clean `create-vite` React/TypeScript initialization. Authentication, persistence, and deployment were added directly rather than using a pre-wired full-stack starter.

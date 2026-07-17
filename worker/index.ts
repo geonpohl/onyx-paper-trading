@@ -41,6 +41,7 @@ const app = new Hono<AppEnv>()
 const ONYX_BASE = 'https://predictions.dev-onyxodds.com'
 const SESSION_COOKIE = 'onyx_session'
 const SESSION_DAYS = 14
+const PASSWORD_HASH_ITERATIONS = 50_000
 const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -161,7 +162,7 @@ async function hashPassword(password: string, saltBase64: string) {
   const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits'])
   const salt = Uint8Array.from(atob(saltBase64), (char) => char.charCodeAt(0))
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', iterations: 120_000, salt },
+    { name: 'PBKDF2', hash: 'SHA-256', iterations: PASSWORD_HASH_ITERATIONS, salt },
     key,
     256,
   )
