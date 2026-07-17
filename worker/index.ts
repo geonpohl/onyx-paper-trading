@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { fillPrice, sidePrices, type RawQuote, type Side } from './domain'
-import { INDEX_HTML } from './static.generated'
+import { INDEX_HTML_BASE64 } from './static.generated'
 
 interface Env {
   DB: D1Database
@@ -42,6 +42,7 @@ const ONYX_BASE = 'https://predictions.dev-onyxodds.com'
 const SESSION_COOKIE = 'onyx_session'
 const SESSION_DAYS = 14
 const PASSWORD_HASH_ITERATIONS = 50_000
+const INDEX_HTML_BYTES = Uint8Array.from(atob(INDEX_HTML_BASE64), (char) => char.charCodeAt(0))
 const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -427,7 +428,7 @@ app.post('/api/orders/market', async (c) => {
 
 app.notFound((c) => {
   if (c.req.path.startsWith('/api/')) return jsonError('Not found', 404)
-  return new Response(INDEX_HTML, {
+  return new Response(INDEX_HTML_BYTES, {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-cache',
