@@ -19,10 +19,13 @@ const [css, javascript, favicon] = await Promise.all([
 ])
 
 html = html
-  .replace(/<link rel="stylesheet"[^>]+>/, `<style>${css.replaceAll('</style', '<\\/style')}</style>`)
+  .replace(
+    /<link rel="stylesheet"[^>]+>/,
+    () => `<style>${css.replaceAll('</style', '<\\/style')}</style>`,
+  )
   .replace(
     /<script type="module"[^>]+><\/script>/,
-    `<script type="module">${javascript.replaceAll('</script', '<\\/script')}</script>`,
+    () => `<script type="module">${javascript.replaceAll('</script', '<\\/script')}</script>`,
   )
   .replace(
     'href="/favicon.svg"',
